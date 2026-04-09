@@ -3,7 +3,7 @@ import { UrbitRTCApp, UrbitRTCPeerConnection } from "rtcswitchboard";
 import { useUrbit } from "./useUrbit";
 import { Room } from "./useRoom";
 
-const DAP = "campfire";
+const DAP = "campfire-room";
 
 export interface PeerConnection {
   conn: UrbitRTCPeerConnection;
