@@ -16,7 +16,7 @@ export default function Home() {
   const { audioOnly, setAudioOnly } = useSettings();
   const notifPermission = typeof Notification !== "undefined" ? Notification.permission : "denied";
   const { contacts } = useContacts();
-  const { hostedRooms, joinedRooms, createRoom, refreshRooms } = useRoom();
+  const { hostedRooms, joinedRooms, createRoom, closeRoom, refreshRooms } = useRoom();
   const navigate = useNavigate();
   const params = useParams<{ patp?: string }>();
   const [input, setInput] = useState("");
@@ -166,30 +166,50 @@ export default function Home() {
           {/* Room list */}
           {allRooms.length > 0 && (
             <div className="flex flex-col gap-1">
-              {allRooms.map((room) => (
-                <button
-                  key={`${room.host}/${room.name}`}
-                  onClick={() => navigate(`/room/~${room.host.replace(/^~/, "")}/${room.name}`)}
-                  className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-stone-800/60 transition-colors text-left group"
-                >
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-sm text-stone-200 truncate">
-                      {room.title || room.name}
-                    </span>
-                    <span className="text-xs text-stone-500 font-mono truncate">
-                      ~{room.host.replace(/^~/, "")}/{room.name}
-                    </span>
+              {allRooms.map((room) => {
+                const isHosted = room.kind === "hosted";
+                const isOwner = room.host.replace(/^~/, "") === ship;
+                return (
+                  <div
+                    key={`${room.host}/${room.name}`}
+                    className="flex items-center gap-1 px-3 py-2.5 rounded-lg hover:bg-stone-800/60 transition-colors group"
+                  >
+                    <button
+                      onClick={() => navigate(`/room/~${room.host.replace(/^~/, "")}/${room.name}`)}
+                      className="flex items-center justify-between flex-1 text-left min-w-0"
+                    >
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm text-stone-200 truncate">
+                          {room.title || room.name}
+                        </span>
+                        <span className="text-xs text-stone-500 font-mono truncate">
+                          ~{room.host.replace(/^~/, "")}/{room.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 ml-2">
+                        <span className="text-xs text-stone-600">
+                          {room.members.length}
+                        </span>
+                        <span className="text-stone-700 group-hover:text-amber-500 transition-colors text-sm">
+                          Join →
+                        </span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const verb = isOwner ? "delete" : "leave";
+                        if (!confirm(`${isOwner ? "Delete" : "Leave"} room "${room.title || room.name}"?`)) return;
+                        await closeRoom(room.host, room.name);
+                      }}
+                      title={isOwner ? "Delete room" : "Leave room"}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-stone-600 hover:text-red-400 px-2 py-1"
+                    >
+                      ×
+                    </button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-stone-600">
-                      {room.members.length}
-                    </span>
-                    <span className="text-stone-700 group-hover:text-amber-500 transition-colors text-sm">
-                      Join →
-                    </span>
-                  </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

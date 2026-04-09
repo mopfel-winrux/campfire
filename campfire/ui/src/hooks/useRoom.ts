@@ -182,6 +182,32 @@ export function useRoom() {
     [urbit, ship, refreshRooms]
   );
 
+  const closeRoom = useCallback(
+    async (host: string, name: string) => {
+      const isHost = host.replace(/^~/, "") === ship;
+      try {
+        if (isHost) {
+          await urbit.poke({
+            app: "campfire",
+            mark: "campfire-action",
+            json: { type: "close", name },
+          });
+        } else {
+          // For joined rooms, just leave
+          await urbit.poke({
+            app: "campfire",
+            mark: "campfire-action",
+            json: { type: "leave", host: `~${host.replace(/^~/, "")}`, name },
+          });
+        }
+      } catch (e) {
+        console.error("Failed to close/leave room:", e);
+      }
+      await refreshRooms();
+    },
+    [urbit, ship, refreshRooms]
+  );
+
   return {
     hostedRooms,
     joinedRooms,
@@ -190,6 +216,7 @@ export function useRoom() {
     joinRoom,
     joinHostedRoom,
     leaveRoom,
+    closeRoom,
     refreshRooms,
   };
 }
