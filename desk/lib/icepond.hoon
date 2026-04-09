@@ -12,23 +12,10 @@
 ++  holium-open
   ^-  fetcher-config:icepond
   [%these-servers ~[[%server urls=~['stun:stun.l.google.com:19302'] auth=~]]]
-::  Public ICE servers: Google STUN + OpenRelay TURN (free tier)
-::  https://www.metered.ca/tools/openrelay/
+::  STUN-only. TURN can be added by the operator if needed.
 ++  servers
   ^-  (list server:icepond)
   :~  [%server urls=~['stun:stun.l.google.com:19302'] auth=~]
-      :*  %server
-          urls=~['turn:openrelay.metered.ca:80']
-          auth=`[username='openrelayproject' credential='openrelayproject' credential-type=~]
-      ==
-      :*  %server
-          urls=~['turn:openrelay.metered.ca:443']
-          auth=`[username='openrelayproject' credential='openrelayproject' credential-type=~]
-      ==
-      :*  %server
-          urls=~['turn:openrelay.metered.ca:443?transport=tcp']
-          auth=`[username='openrelayproject' credential='openrelayproject' credential-type=~]
-      ==
   ==
 ++  enjs
   |%
