@@ -56,7 +56,7 @@ export function useRoom() {
 
   const joinRoom = useCallback(
     async (host: string, name: string) => {
-      // Subscribe FIRST so we catch the snapshot
+      // Subscribe for live updates
       const subId = await urbit.subscribe({
         app: "campfire",
         path: "/joined",
@@ -64,36 +64,55 @@ export function useRoom() {
           console.log("Room event:", evt);
           if (evt.type === "snapshot") {
             setCurrentRoom(parseRoom(evt.room));
-          } else if (evt.type === "joined" && evt.name === name) {
+          } else if (evt.type === "joined") {
             setCurrentRoom((r) =>
               r ? { ...r, members: [...new Set([...r.members, evt.who])] } : r
             );
-          } else if (evt.type === "left" && evt.name === name) {
+          } else if (evt.type === "left") {
             setCurrentRoom((r) =>
               r ? { ...r, members: r.members.filter((m) => m !== evt.who) } : r
             );
-          } else if (evt.type === "closed" && evt.name === name) {
+          } else if (evt.type === "closed") {
             setCurrentRoom(null);
           }
         },
-        err: console.error,
+        err: (e: any) => console.error("Room sub error:", e),
         quit: () => console.warn("Room subscription quit"),
       });
       subIdRef.current = subId;
 
-      // Then poke to join
-      await urbit.poke({
-        app: "campfire",
-        mark: "campfire-action",
-        json: { type: "join", host: `~${host.replace(/^~/, "")}`, name },
-      });
+      // Poke to join (might fail if already joined — that's ok)
+      try {
+        await urbit.poke({
+          app: "campfire",
+          mark: "campfire-action",
+          json: { type: "join", host: `~${host.replace(/^~/, "")}`, name },
+        });
+      } catch (e) {
+        console.warn("Join poke failed (may already be joined):", e);
+      }
+
+      // Fallback: scry for current state after a short delay
+      setTimeout(async () => {
+        try {
+          const joined = await urbit.scry<any[]>({ app: "campfire", path: "/joined" });
+          if (Array.isArray(joined)) {
+            const match = joined.find((r: any) => r.name === name);
+            if (match) {
+              console.log("Room fallback scry found:", match);
+              setCurrentRoom(parseRoom(match));
+            }
+          }
+        } catch (e) {
+          console.warn("Room fallback scry failed:", e);
+        }
+      }, 2000);
     },
     [urbit]
   );
 
   const joinHostedRoom = useCallback(
     async (name: string) => {
-      // Subscribe to our own hosted room
       const subId = await urbit.subscribe({
         app: "campfire",
         path: `/room/${name}`,
@@ -117,6 +136,22 @@ export function useRoom() {
         quit: () => console.warn("Hosted room subscription quit"),
       });
       subIdRef.current = subId;
+
+      // Fallback scry
+      setTimeout(async () => {
+        try {
+          const hosted = await urbit.scry<any[]>({ app: "campfire", path: "/hosted" });
+          if (Array.isArray(hosted)) {
+            const match = hosted.find((r: any) => r.name === name);
+            if (match) {
+              console.log("Hosted room fallback scry found:", match);
+              setCurrentRoom(parseRoom(match));
+            }
+          }
+        } catch (e) {
+          console.warn("Hosted room fallback scry failed:", e);
+        }
+      }, 1500);
     },
     [urbit]
   );
