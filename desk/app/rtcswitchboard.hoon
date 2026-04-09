@@ -523,12 +523,15 @@
   (move-to-state [uuid peer dap] %placing)
 ++  reject-call
   |=  uuid=@ta
-  =/  callstate  (~(got by calls.state) uuid)
+  =/  callstate  (~(get by calls.state) uuid)
+  ?~  callstate
+    ~&  >  "rtcswitchboard: reject-call for unknown uuid {<uuid>}, ignoring"
+    `state
   :_  state(calls (~(del by calls.state) uuid))
   :~
     :*
       %pass  /inter-poke/[uuid]
-      %agent  [peer.call.callstate %rtcswitchboard]
+      %agent  [peer.call.u.callstate %rtcswitchboard]
       %poke  [%rtcswitchboard-to-rtcswitchboard !>([uuid=uuid [%hangup ~]])]
     ==
   ==
