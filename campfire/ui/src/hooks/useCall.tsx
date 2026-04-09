@@ -45,8 +45,10 @@ interface CallCtx {
   sendMessage: (text: string) => void;
   toggleAudio: () => void;
   toggleVideo: () => void;
+  toggleScreenShare: () => Promise<void>;
   audioEnabled: boolean;
   videoEnabled: boolean;
+  screenSharing: boolean;
   requestNotificationPermission: () => void;
 }
 
@@ -60,8 +62,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [iceServers, setIceServers] = useState<RTCIceServer[]>([]);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
+  const [screenSharing, setScreenSharing] = useState(false);
   const rtcAppRef = useRef<UrbitRTCApp | null>(null);
   const callRef = useRef<CallState | null>(null);
+  const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
 
   callRef.current = call;
 
@@ -410,6 +414,70 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     });
   }, [call]);
 
+  const toggleScreenShare = useCallback(async () => {
+    if (!call?.conn || !call?.localStream) return;
+    const sender = call.conn.getSenders().find((s) => s.track?.kind === "video");
+    if (!sender) return;
+
+    if (screenSharing) {
+      // Restore camera
+      const cam = cameraTrackRef.current;
+      if (cam) {
+        await sender.replaceTrack(cam);
+        // Replace track in local stream
+        const stream = call.localStream;
+        stream.getVideoTracks().forEach((t) => {
+          if (t !== cam) {
+            stream.removeTrack(t);
+            t.stop();
+          }
+        });
+        if (!stream.getVideoTracks().includes(cam)) {
+          stream.addTrack(cam);
+        }
+        setCall((c) => (c ? { ...c, localStream: new MediaStream(stream.getTracks()) } : c));
+      }
+      cameraTrackRef.current = null;
+      setScreenSharing(false);
+    } else {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: false,
+        });
+        const screenTrack = screenStream.getVideoTracks()[0];
+        if (!screenTrack) return;
+
+        // Save the current camera track for restoration
+        cameraTrackRef.current = sender.track;
+        await sender.replaceTrack(screenTrack);
+
+        // Update local stream to show screen instead of camera
+        const stream = call.localStream;
+        stream.getVideoTracks().forEach((t) => stream.removeTrack(t));
+        stream.addTrack(screenTrack);
+        setCall((c) => (c ? { ...c, localStream: new MediaStream(stream.getTracks()) } : c));
+
+        // When user stops sharing via the browser UI
+        screenTrack.onended = () => {
+          const cam = cameraTrackRef.current;
+          if (cam && sender.track === screenTrack) {
+            sender.replaceTrack(cam).catch(console.warn);
+            stream.removeTrack(screenTrack);
+            stream.addTrack(cam);
+            setCall((c) => (c ? { ...c, localStream: new MediaStream(stream.getTracks()) } : c));
+            cameraTrackRef.current = null;
+          }
+          setScreenSharing(false);
+        };
+
+        setScreenSharing(true);
+      } catch (e) {
+        console.warn("Screen share failed:", e);
+      }
+    }
+  }, [call, screenSharing]);
+
   // Must be called from a user gesture (button click)
   const requestNotificationPermission = useCallback(() => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -430,8 +498,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         sendMessage,
         toggleAudio,
         toggleVideo,
+        toggleScreenShare,
         audioEnabled,
         videoEnabled,
+        screenSharing,
         requestNotificationPermission,
       }}
     >

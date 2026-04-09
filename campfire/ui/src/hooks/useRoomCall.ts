@@ -21,11 +21,13 @@ export function useRoomCall(room: Room | null) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
+  const [screenSharing, setScreenSharing] = useState(false);
   const [messages, setMessages] = useState<{ speaker: string; text: string }[]>([]);
   const [mediaReady, setMediaReady] = useState(false);
   const rtcAppRef = useRef<UrbitRTCApp | null>(null);
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
+  const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const dataChannelsRef = useRef<Map<string, RTCDataChannel>>(new Map());
 
   peersRef.current = peers;
@@ -268,6 +270,86 @@ export function useRoomCall(room: Room | null) {
     });
   }, [localStream]);
 
+  const toggleScreenShare = useCallback(async () => {
+    if (!localStreamRef.current) return;
+
+    const replaceTrackOnAllPeers = async (newTrack: MediaStreamTrack | null) => {
+      const promises: Promise<void>[] = [];
+      peersRef.current.forEach((pc) => {
+        const sender = (pc.conn as any).getSenders().find(
+          (s: RTCRtpSender) => s.track?.kind === "video"
+        );
+        if (sender) promises.push(sender.replaceTrack(newTrack));
+      });
+      await Promise.all(promises);
+    };
+
+    if (screenSharing) {
+      // Restore camera
+      const cam = cameraTrackRef.current;
+      if (cam) {
+        await replaceTrackOnAllPeers(cam);
+        const stream = localStreamRef.current;
+        stream.getVideoTracks().forEach((t) => {
+          if (t !== cam) {
+            stream.removeTrack(t);
+            t.stop();
+          }
+        });
+        if (!stream.getVideoTracks().includes(cam)) {
+          stream.addTrack(cam);
+        }
+        const newStream = new MediaStream(stream.getTracks());
+        localStreamRef.current = newStream;
+        setLocalStream(newStream);
+      }
+      cameraTrackRef.current = null;
+      setScreenSharing(false);
+    } else {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: false,
+        });
+        const screenTrack = screenStream.getVideoTracks()[0];
+        if (!screenTrack) return;
+
+        // Save current camera track
+        const stream = localStreamRef.current;
+        const cam = stream.getVideoTracks()[0] || null;
+        cameraTrackRef.current = cam;
+
+        await replaceTrackOnAllPeers(screenTrack);
+        stream.getVideoTracks().forEach((t) => stream.removeTrack(t));
+        stream.addTrack(screenTrack);
+        const newStream = new MediaStream(stream.getTracks());
+        localStreamRef.current = newStream;
+        setLocalStream(newStream);
+
+        screenTrack.onended = async () => {
+          const cam2 = cameraTrackRef.current;
+          if (cam2) {
+            await replaceTrackOnAllPeers(cam2);
+            const s = localStreamRef.current;
+            if (s) {
+              s.removeTrack(screenTrack);
+              s.addTrack(cam2);
+              const ns = new MediaStream(s.getTracks());
+              localStreamRef.current = ns;
+              setLocalStream(ns);
+            }
+            cameraTrackRef.current = null;
+          }
+          setScreenSharing(false);
+        };
+
+        setScreenSharing(true);
+      } catch (e) {
+        console.warn("Screen share failed:", e);
+      }
+    }
+  }, [screenSharing]);
+
   const cleanup = useCallback(() => {
     peersRef.current.forEach((p) => {
       try { p.conn.close(); } catch (e) {}
@@ -286,9 +368,11 @@ export function useRoomCall(room: Room | null) {
     messages,
     audioEnabled,
     videoEnabled,
+    screenSharing,
     sendMessage,
     toggleAudio,
     toggleVideo,
+    toggleScreenShare,
     cleanup,
   };
 }
