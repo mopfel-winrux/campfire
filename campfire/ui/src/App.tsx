@@ -1,33 +1,30 @@
 import React from "react";
-import { BrowserRouter, Redirect, Route, Switch } from "react-router-dom";
-import { ThemeProvider } from "styled-components";
-import { theme } from "@holium/design-system";
-import { StartMeetingPage } from "./pages/StartMeeting";
-import { MeetingSpace } from "./pages/MeetingSpace";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { UrbitProvider } from "./hooks/useUrbit";
+import { CallProvider } from "./hooks/useCall";
+import Home from "./pages/Home";
+import CallPage from "./pages/CallPage";
+import RoomPage from "./pages/RoomPage";
 
-import { rootStore, StoreProvider } from "./stores/root";
-
-function App() {
+export default function App() {
   return (
-    <StoreProvider store={rootStore}>
-      <ThemeProvider theme={theme.light}>
-        <BrowserRouter basename={"/apps/campfire"}>
-          <Switch>
-            <Route path={["/", "/call/:patp"]} exact>
-              <StartMeetingPage />
-            </Route>
-            <Route path="/chat/:uuid">
-              <MeetingSpace />
-            </Route>
-            {/* Catch all for anything else */}
-            <Route path="*">
-              <Redirect to="/" />
-            </Route>
-          </Switch>
+    <UrbitProvider>
+      <CallProvider>
+        <BrowserRouter basename="/apps/campfire">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/call/:patp" element={<Home />} />
+            <Route path="/chat/:uuid" element={<CallPage />} />
+            <Route path="/room/:host/:name" element={<RoomPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </BrowserRouter>
-      </ThemeProvider>
-    </StoreProvider>
+      </CallProvider>
+    </UrbitProvider>
   );
 }
-
-export default App;

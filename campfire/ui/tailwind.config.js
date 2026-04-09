@@ -1,35 +1,11 @@
-const colors = require("tailwindcss/colors");
-
+/** @type {import('tailwindcss').Config} */
 module.exports = {
-  mode: "jit",
-  purge: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
-  darkMode: "media", // or 'media' or 'class'
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     fontFamily: {
-      sans: [
-        "Rubik",
-        "Inter",
-        "Inter UI",
-        "-apple-system",
-        "BlinkMacSystemFont",
-        "San Francisco",
-        "Helvetica Neue",
-        "Arial",
-        "sans-serif",
-      ],
-      mono: ["Source Code Pro", "Roboto mono", "Courier New", "monospace"],
-    },
-    extend: {
-      colors: {
-        pink: colors.rose,
-      },
+      sans: ["Rubik", "Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+      mono: ["Source Code Pro", "Roboto Mono", "Courier New", "monospace"],
     },
   },
-  variants: {
-    extend: {},
-  },
-  plugins: [
-    require("@tailwindcss/aspect-ratio"),
-    require("tailwindcss-touch")(),
-  ],
+  plugins: [],
 };

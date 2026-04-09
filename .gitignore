@@ -5,3 +5,8 @@ node_modules
 *.local
 .DS_Store
 lerna-debug.log
+zod/
+fel/
+urbit
+.claude/
+desk/www/

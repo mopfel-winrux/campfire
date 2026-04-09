@@ -1,8 +1,7 @@
-@import "tailwindcss/base";
-@import "./base.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@import "tailwindcss/components";
-@import "./components.css";
-
-@import "tailwindcss/utilities";
-@import "./utilities.css";
+.mirror {
+  transform: scaleX(-1);
+}
