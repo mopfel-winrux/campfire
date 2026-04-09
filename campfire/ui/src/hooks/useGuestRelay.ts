@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useUrbit } from "./useUrbit";
+import { startBandwidthMonitor } from "../lib/bandwidth";
 import { Room } from "./useRoom";
 import { PeerConnection } from "./useRoomCall";
 
@@ -173,6 +174,9 @@ export function useGuestRelay({ room, isHost, localStream, roomPeers }: Props) {
             sdp: answer.sdp,
           },
         });
+
+        // Start bandwidth monitoring on this guest connection
+        startBandwidthMonitor(pc);
       } catch (e) {
         console.error("GuestRelay: failed to handle offer:", e);
         return;

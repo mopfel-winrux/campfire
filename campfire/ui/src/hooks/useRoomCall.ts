@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { UrbitRTCApp, UrbitRTCPeerConnection } from "rtcswitchboard";
 import { useUrbit } from "./useUrbit";
 import { useSettings } from "./useSettings";
+import { startBandwidthMonitor } from "../lib/bandwidth";
 import { Room } from "./useRoom";
 
 const DAP = "campfire-room";
@@ -169,6 +170,39 @@ export function useRoomCall(room: Room | null) {
         dataChannelsRef.current.delete(peerClean);
       });
 
+      // Auto-reconnect on disconnect/failed
+      let reconnectAttempts = 0;
+      const maxReconnects = 3;
+      let disconnectTimer: any = null;
+      conn.addEventListener("connectionstatechange", () => {
+        const cs = (conn as any).connectionState;
+        if (cs === "connected") {
+          reconnectAttempts = 0;
+          if (disconnectTimer) {
+            clearTimeout(disconnectTimer);
+            disconnectTimer = null;
+          }
+          return;
+        }
+        if (cs === "disconnected") {
+          disconnectTimer = setTimeout(() => {
+            if ((conn as any).connectionState === "disconnected" && reconnectAttempts < maxReconnects) {
+              console.log("Room: ICE restart for", peerClean, "attempt", reconnectAttempts + 1);
+              reconnectAttempts++;
+              try { (conn as any).restartIce(); } catch (e) { console.warn(e); }
+            }
+          }, 2000);
+          return;
+        }
+        if (cs === "failed") {
+          if (reconnectAttempts < maxReconnects) {
+            console.log("Room: ICE restart after failure for", peerClean, "attempt", reconnectAttempts + 1);
+            reconnectAttempts++;
+            try { (conn as any).restartIce(); } catch (e) { console.warn(e); }
+          }
+        }
+      });
+
       // Data channel for ephemeral chat
       if (isCaller) {
         const dc = conn.createDataChannel("campfire-room");
@@ -193,6 +227,9 @@ export function useRoomCall(room: Room | null) {
           conn.addTrack(track, localStreamRef.current!);
         });
       }
+
+      // Start bandwidth monitoring
+      startBandwidthMonitor(conn as any);
 
       // Add to peers map
       setPeers((prev) => {

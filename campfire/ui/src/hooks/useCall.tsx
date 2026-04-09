@@ -10,6 +10,7 @@ import { UrbitRTCApp, UrbitRTCIncomingCallEvent, UrbitRTCPeerConnection } from "
 import Icepond from "icepond";
 import { useUrbit } from "./useUrbit";
 import { useSettings } from "./useSettings";
+import { startBandwidthMonitor } from "../lib/bandwidth";
 
 const DAP = "campfire";
 
@@ -281,6 +282,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         .then((stream) => {
           stream.getTracks().forEach((track) => conn.addTrack(track, stream));
           setCall((c) => (c ? { ...c, localStream: stream } : c));
+          // Start bandwidth monitoring once tracks are added
+          startBandwidthMonitor(conn);
         })
         .catch(() => {
           navigator.mediaDevices
