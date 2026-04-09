@@ -11,6 +11,7 @@ import Icepond from "icepond";
 import { useUrbit } from "./useUrbit";
 import { useSettings } from "./useSettings";
 import { startBandwidthMonitor } from "../lib/bandwidth";
+import { DEFAULT_RTC_CONFIG } from "../lib/iceConfig";
 
 const DAP = "campfire";
 
@@ -73,11 +74,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!ship) return;
 
-    const config: RTCConfiguration = {
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    };
-
-    const app = new UrbitRTCApp(DAP, config);
+    const app = new UrbitRTCApp(DAP, DEFAULT_RTC_CONFIG);
     app.urbit = urbit;
     rtcAppRef.current = app;
 

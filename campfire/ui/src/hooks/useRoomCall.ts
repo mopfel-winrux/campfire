@@ -3,6 +3,7 @@ import { UrbitRTCApp, UrbitRTCPeerConnection } from "rtcswitchboard";
 import { useUrbit } from "./useUrbit";
 import { useSettings } from "./useSettings";
 import { startBandwidthMonitor } from "../lib/bandwidth";
+import { DEFAULT_RTC_CONFIG } from "../lib/iceConfig";
 import { Room } from "./useRoom";
 
 const DAP = "campfire-room";
@@ -36,10 +37,7 @@ export function useRoomCall(room: Room | null) {
   // Initialize UrbitRTCApp
   useEffect(() => {
     if (!ship) return;
-    const config: RTCConfiguration = {
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    };
-    const app = new UrbitRTCApp(DAP, config);
+    const app = new UrbitRTCApp(DAP, DEFAULT_RTC_CONFIG);
 
     // Attach listener BEFORE urbit assignment (which triggers initialize/subscribe)
     app.addEventListener("incomingcall", ((evt: any) => {

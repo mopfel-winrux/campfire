@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useUrbit } from "./useUrbit";
 import { startBandwidthMonitor } from "../lib/bandwidth";
+import { DEFAULT_ICE_SERVERS } from "../lib/iceConfig";
 import { Room } from "./useRoom";
 import { PeerConnection } from "./useRoomCall";
 
@@ -88,7 +89,7 @@ export function useGuestRelay({ room, isHost, localStream, roomPeers }: Props) {
       }
 
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        iceServers: DEFAULT_ICE_SERVERS,
       });
 
       const remoteStream = new MediaStream();

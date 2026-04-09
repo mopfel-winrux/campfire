@@ -681,7 +681,7 @@
       }
       document.getElementById('local').srcObject = state.localStream;
       setStatus('Connecting...');
-      state.pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      state.pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }, { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }, { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }] });
       state.localStream.getTracks().forEach(function(t) { state.pc.addTrack(t, state.localStream); });
       state.remoteStreams = {};
       state.pc.ontrack = function(evt) {
