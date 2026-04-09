@@ -6,6 +6,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { UrbitProvider } from "./hooks/useUrbit";
+import { SettingsProvider } from "./hooks/useSettings";
 import { CallProvider } from "./hooks/useCall";
 import Home from "./pages/Home";
 import CallPage from "./pages/CallPage";
@@ -14,7 +15,8 @@ import RoomPage from "./pages/RoomPage";
 export default function App() {
   return (
     <UrbitProvider>
-      <CallProvider>
+      <SettingsProvider>
+        <CallProvider>
         <BrowserRouter basename="/apps/campfire">
           <Routes>
             <Route path="/" element={<Home />} />
@@ -24,7 +26,8 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
-      </CallProvider>
+        </CallProvider>
+      </SettingsProvider>
     </UrbitProvider>
   );
 }

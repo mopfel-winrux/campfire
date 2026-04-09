@@ -6,12 +6,14 @@ import { useUrbit } from "../hooks/useUrbit";
 import { useCall } from "../hooks/useCall";
 import { useContacts } from "../hooks/useContacts";
 import { useRoom } from "../hooks/useRoom";
+import { useSettings } from "../hooks/useSettings";
 import ContactList from "../components/ContactList";
 import { Campfire } from "../icons/Campfire";
 
 export default function Home() {
   const { ship } = useUrbit();
   const { incoming, placeCall, answerCall, rejectCall, requestNotificationPermission } = useCall();
+  const { audioOnly, setAudioOnly } = useSettings();
   const notifPermission = typeof Notification !== "undefined" ? Notification.permission : "denied";
   const { contacts } = useContacts();
   const { hostedRooms, joinedRooms, createRoom, refreshRooms } = useRoom();
@@ -220,6 +222,15 @@ export default function Home() {
 
       <footer className="absolute bottom-4 flex items-center gap-4 text-stone-700 text-xs">
         <span>v0.2.0</span>
+        <label className="flex items-center gap-1.5 text-stone-500 hover:text-stone-300 cursor-pointer transition-colors">
+          <input
+            type="checkbox"
+            checked={audioOnly}
+            onChange={(e) => setAudioOnly(e.target.checked)}
+            className="accent-amber-600 w-3 h-3"
+          />
+          Audio only
+        </label>
         {notifPermission === "default" && (
           <button
             onClick={requestNotificationPermission}

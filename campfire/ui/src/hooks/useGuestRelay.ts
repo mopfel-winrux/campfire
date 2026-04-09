@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useUrbit } from "./useUrbit";
 import { Room } from "./useRoom";
+import { PeerConnection } from "./useRoomCall";
 
 export interface GuestPeer {
   guestId: string;
@@ -14,21 +15,24 @@ interface Props {
   room: Room | null;
   isHost: boolean;
   localStream: MediaStream | null;
+  roomPeers: Map<string, PeerConnection>;
 }
 
 /**
  * Host-side hook that listens for public room guest signals and establishes
  * WebRTC peer connections with them.
  */
-export function useGuestRelay({ room, isHost, localStream }: Props) {
+export function useGuestRelay({ room, isHost, localStream, roomPeers }: Props) {
   const { urbit } = useUrbit();
   const [guests, setGuests] = useState<Map<string, GuestPeer>>(new Map());
   const guestsRef = useRef<Map<string, GuestPeer>>(new Map());
   const subIdRef = useRef<number | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const roomPeersRef = useRef<Map<string, PeerConnection>>(new Map());
 
   guestsRef.current = guests;
   localStreamRef.current = localStream;
+  roomPeersRef.current = roomPeers;
 
   // Subscribe to guest updates when hosting a public room
   useEffect(() => {
@@ -138,6 +142,20 @@ export function useGuestRelay({ room, isHost, localStream }: Props) {
           pc.addTrack(t, localStreamRef.current!);
         });
       }
+
+      // Relay other room members' tracks to the guest (host as SFU)
+      roomPeersRef.current.forEach((peerConn, peerShip) => {
+        if (peerConn.remoteStream) {
+          peerConn.remoteStream.getTracks().forEach((track) => {
+            try {
+              pc.addTrack(track, peerConn.remoteStream);
+              console.log("GuestRelay: relaying", peerShip, track.kind, "to guest", guestId);
+            } catch (e) {
+              console.warn("Failed to relay track:", e);
+            }
+          });
+        }
+      });
 
       // Process the guest's offer
       try {

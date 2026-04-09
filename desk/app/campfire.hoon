@@ -304,6 +304,15 @@
 ++  handle-http
   |=  [rid=@ta req=inbound-request:eyre]
   ^-  (quip card state-1)
+  ::  GC stale guests (last-seen older than 5 minutes)
+  =/  cutoff  (sub now.bowl ~m5)
+  =/  fresh-guests
+    %-  malt
+    %+  skim  ~(tap by guests.state)
+    |=  [gid=guest-id:campfire g=guest-session:campfire]
+    (gth last-seen.g cutoff)
+  =.  state  state(guests fresh-guests)
+  ::
   =*  url  url.request.req
   =/  method  method.request.req
   =/  parsed  (rush url ;~(plug apat:de-purl:html yque:de-purl:html))
@@ -603,8 +612,13 @@
   .call { display: none; flex-direction: column; align-items: center; width: 100%; height: 100vh; justify-content: center; }
   .call.active { display: flex; }
   .prompt.hidden { display: none; }
-  video { max-width: 100%; max-height: 70vh; border-radius: 12px; background: #0c0a09; }
-  #local { position: fixed; top: 16px; right: 16px; width: 160px; height: 120px; border: 1px solid #44403c; }
+  video { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; background: #0c0a09; }
+  .remote-grid { display: grid; gap: 8px; padding: 16px; max-width: 90vw; max-height: 80vh; }
+  .remote-grid.count-1 { grid-template-columns: 1fr; }
+  .remote-grid.count-2 { grid-template-columns: 1fr 1fr; }
+  .remote-grid.count-3, .remote-grid.count-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+  .remote-tile { aspect-ratio: 16/9; min-width: 280px; }
+  #local { position: fixed; top: 16px; right: 16px; width: 160px; height: 120px; border: 1px solid #44403c; z-index: 10; }
   .controls { margin-top: 16px; display: flex; gap: 12px; }
   .leave { background: #dc2626; color: white; }
   .status { color: #a8a29e; font-size: 12px; margin-top: 8px; }
@@ -620,7 +634,7 @@
     <div class="status" id="status"></div>
   </div>
   <div class="call" id="callView">
-    <video id="remote" autoplay playsinline></video>
+    <div id="remoteGrid" class="remote-grid"></div>
     <video id="local" autoplay playsinline muted></video>
     <div class="controls">
       <button id="leaveBtn" class="leave">Leave</button>
@@ -669,8 +683,33 @@
       setStatus('Connecting...');
       state.pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
       state.localStream.getTracks().forEach(function(t) { state.pc.addTrack(t, state.localStream); });
+      state.remoteStreams = {};
       state.pc.ontrack = function(evt) {
-        document.getElementById('remote').srcObject = evt.streams[0];
+        var stream = evt.streams[0];
+        if (!stream) return;
+        if (state.remoteStreams[stream.id]) return;
+        state.remoteStreams[stream.id] = stream;
+        var grid = document.getElementById('remoteGrid');
+        var tile = document.createElement('div');
+        tile.className = 'remote-tile';
+        tile.id = 'tile-' + stream.id;
+        var v = document.createElement('video');
+        v.autoplay = true;
+        v.playsInline = true;
+        v.srcObject = stream;
+        tile.appendChild(v);
+        grid.appendChild(tile);
+        var count = Object.keys(state.remoteStreams).length;
+        grid.className = 'remote-grid count-' + Math.min(count, 4);
+        // remove tile when stream ends
+        stream.addEventListener('removetrack', function() {
+          if (stream.getTracks().length === 0) {
+            var t = document.getElementById('tile-' + stream.id);
+            if (t) t.remove();
+            delete state.remoteStreams[stream.id];
+            grid.className = 'remote-grid count-' + Math.min(Object.keys(state.remoteStreams).length, 4);
+          }
+        });
       };
       state.pc.onicecandidate = function(evt) {
         if (evt.candidate && state.guestId) {

@@ -19,6 +19,7 @@ export default function RoomPage() {
     room: currentRoom,
     isHost: (host?.replace(/^~/, "") || "") === ship,
     localStream,
+    roomPeers: peers,
   });
   const [chatInput, setChatInput] = useState("");
   const [showChat, setShowChat] = useState(false);

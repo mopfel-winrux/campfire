@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UrbitRTCApp, UrbitRTCPeerConnection } from "rtcswitchboard";
 import { useUrbit } from "./useUrbit";
+import { useSettings } from "./useSettings";
 import { Room } from "./useRoom";
 
 const DAP = "campfire-room";
@@ -14,6 +15,7 @@ export interface PeerConnection {
 
 export function useRoomCall(room: Room | null) {
   const { urbit, ship } = useUrbit();
+  const { audioOnly } = useSettings();
   const [peers, setPeers] = useState<Map<string, PeerConnection>>(new Map());
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(true);
@@ -59,8 +61,11 @@ export function useRoomCall(room: Room | null) {
   // Get local media on room join
   useEffect(() => {
     if (!room) return;
+    const constraints = audioOnly
+      ? { audio: true, video: false }
+      : { audio: true, video: true };
     navigator.mediaDevices
-      .getUserMedia({ audio: true, video: true })
+      .getUserMedia(constraints)
       .then((stream) => {
         setLocalStream(stream);
         localStreamRef.current = stream;
@@ -85,7 +90,7 @@ export function useRoomCall(room: Room | null) {
       setLocalStream(null);
       setMediaReady(false);
     };
-  }, [room?.name]);
+  }, [room?.name, audioOnly]);
 
   // Connect to room members AFTER media is ready
   useEffect(() => {

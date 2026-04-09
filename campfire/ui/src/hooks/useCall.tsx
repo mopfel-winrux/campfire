@@ -9,6 +9,7 @@ import React, {
 import { UrbitRTCApp, UrbitRTCIncomingCallEvent, UrbitRTCPeerConnection } from "rtcswitchboard";
 import Icepond from "icepond";
 import { useUrbit } from "./useUrbit";
+import { useSettings } from "./useSettings";
 
 const DAP = "campfire";
 
@@ -52,6 +53,7 @@ const CallContext = createContext<CallCtx>(null!);
 
 export function CallProvider({ children }: { children: React.ReactNode }) {
   const { urbit, ship } = useUrbit();
+  const { audioOnly } = useSettings();
   const [incoming, setIncoming] = useState<IncomingCall | null>(null);
   const [call, setCall] = useState<CallState | null>(null);
   const [iceServers, setIceServers] = useState<RTCIceServer[]>([]);
@@ -185,10 +187,48 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         });
       });
 
-      // Also detect WebRTC connection failure/close
+      // Auto-reconnect on disconnect/failed state
+      let reconnectAttempts = 0;
+      const maxReconnects = 3;
+      let disconnectTimer: any = null;
+
       conn.onconnectionstatechange = () => {
         console.log("WebRTC connection state:", conn.connectionState);
-        if (conn.connectionState === "failed" || conn.connectionState === "disconnected") {
+        if (conn.connectionState === "connected") {
+          reconnectAttempts = 0;
+          if (disconnectTimer) {
+            clearTimeout(disconnectTimer);
+            disconnectTimer = null;
+          }
+          return;
+        }
+        if (conn.connectionState === "disconnected") {
+          // Wait briefly to see if it self-recovers
+          disconnectTimer = setTimeout(() => {
+            if (conn.connectionState === "disconnected" && reconnectAttempts < maxReconnects) {
+              console.log("WebRTC: attempting ICE restart, attempt", reconnectAttempts + 1);
+              reconnectAttempts++;
+              try {
+                conn.restartIce();
+              } catch (e) {
+                console.warn("ICE restart failed", e);
+              }
+            }
+          }, 2000);
+          return;
+        }
+        if (conn.connectionState === "failed") {
+          if (reconnectAttempts < maxReconnects) {
+            console.log("WebRTC: attempting ICE restart after failure, attempt", reconnectAttempts + 1);
+            reconnectAttempts++;
+            try {
+              conn.restartIce();
+            } catch (e) {
+              console.warn("ICE restart failed", e);
+            }
+            return;
+          }
+          // Give up
           setCall((c) => {
             if (c && !c.wasHungUp) {
               return { ...c, wasHungUp: true, dataChannelOpen: false };
@@ -232,9 +272,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         }) as EventListener);
       }
 
-      // Get local media
+      // Get local media — respects audio-only setting
+      const constraints = audioOnly
+        ? { audio: true, video: false }
+        : { audio: true, video: true };
       navigator.mediaDevices
-        .getUserMedia({ audio: true, video: true })
+        .getUserMedia(constraints)
         .then((stream) => {
           stream.getTracks().forEach((track) => conn.addTrack(track, stream));
           setCall((c) => (c ? { ...c, localStream: stream } : c));
@@ -281,7 +324,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
       return newCall;
     },
-    [ship]
+    [ship, audioOnly]
   );
 
   const placeCall = useCallback(
