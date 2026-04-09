@@ -1,14 +1,36 @@
 import React, { useEffect, useRef } from "react";
 import { PeerConnection } from "../hooks/useRoomCall";
+import { GuestPeer } from "../hooks/useGuestRelay";
 
 interface Props {
   peers: Map<string, PeerConnection>;
+  guests?: Map<string, GuestPeer>;
   localStream: MediaStream | null;
   ship: string;
 }
 
-export default function VideoGrid({ peers, localStream, ship }: Props) {
-  const count = peers.size;
+export default function VideoGrid({ peers, guests, localStream, ship }: Props) {
+  const peerTiles: { key: string; label: string; stream: MediaStream; connected: boolean }[] = [];
+
+  peers.forEach((pc, peerShip) => {
+    peerTiles.push({
+      key: "p-" + peerShip,
+      label: "~" + peerShip,
+      stream: pc.remoteStream,
+      connected: pc.status.includes("connected"),
+    });
+  });
+
+  guests?.forEach((g, gid) => {
+    peerTiles.push({
+      key: "g-" + gid,
+      label: g.displayName + " (guest)",
+      stream: g.remoteStream,
+      connected: g.status === "connected",
+    });
+  });
+
+  const count = peerTiles.length;
 
   const gridClass =
     count <= 1
@@ -27,8 +49,8 @@ export default function VideoGrid({ peers, localStream, ship }: Props) {
             Waiting for others to join...
           </div>
         )}
-        {Array.from(peers.entries()).map(([peerShip, pc]) => (
-          <PeerVideo key={peerShip} peer={pc} />
+        {peerTiles.map((tile) => (
+          <TileVideo key={tile.key} label={tile.label} stream={tile.stream} connected={tile.connected} />
         ))}
       </div>
 
@@ -43,16 +65,14 @@ export default function VideoGrid({ peers, localStream, ship }: Props) {
   );
 }
 
-function PeerVideo({ peer }: { peer: PeerConnection }) {
+function TileVideo({ label, stream, connected }: { label: string; stream: MediaStream; connected: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current && peer.remoteStream) {
-      videoRef.current.srcObject = peer.remoteStream;
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
     }
-  }, [peer.remoteStream]);
-
-  const connected = peer.status.includes("connected");
+  }, [stream]);
 
   return (
     <div className="relative bg-stone-900 rounded-lg overflow-hidden flex items-center justify-center">
@@ -68,7 +88,7 @@ function PeerVideo({ peer }: { peer: PeerConnection }) {
         </div>
       )}
       <div className="absolute bottom-2 left-3 bg-black/50 px-2 py-0.5 rounded text-xs text-stone-300 font-mono">
-        ~{peer.peer}
+        {label}
       </div>
     </div>
   );

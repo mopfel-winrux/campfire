@@ -23,6 +23,7 @@ export default function Home() {
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [roomName, setRoomName] = useState("");
   const [roomTitle, setRoomTitle] = useState("");
+  const [roomPublic, setRoomPublic] = useState(false);
   const autoCalledRef = useRef(false);
 
   useEffect(() => {
@@ -65,10 +66,11 @@ export default function Home() {
   const handleCreateRoom = async () => {
     if (!roomName.trim()) return;
     const slug = roomName.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-");
-    await createRoom(slug, roomTitle || roomName);
+    await createRoom(slug, roomTitle || roomName, roomPublic);
     setShowCreateRoom(false);
     setRoomName("");
     setRoomTitle("");
+    setRoomPublic(false);
     navigate(`/room/~${ship}/${slug}`);
   };
 
@@ -140,6 +142,15 @@ export default function Home() {
                 placeholder="Display title (optional)"
                 className="bg-stone-800 border border-stone-700 rounded px-3 py-2 text-sm text-stone-100 placeholder:text-stone-600 focus:outline-none focus:border-amber-700/50"
               />
+              <label className="flex items-center gap-2 px-1 py-1 text-xs text-stone-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={roomPublic}
+                  onChange={(e) => setRoomPublic(e.target.checked)}
+                  className="accent-amber-600"
+                />
+                <span>Public — non-Urbit users can join with a link</span>
+              </label>
               <button
                 onClick={handleCreateRoom}
                 disabled={!roomName.trim()}

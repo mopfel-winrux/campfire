@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useUrbit } from "../hooks/useUrbit";
 import { useRoom, Room } from "../hooks/useRoom";
 import { useRoomCall } from "../hooks/useRoomCall";
+import { useGuestRelay } from "../hooks/useGuestRelay";
 import VideoGrid from "../components/VideoGrid";
 
 export default function RoomPage() {
@@ -14,6 +15,11 @@ export default function RoomPage() {
     peers, localStream, messages, audioEnabled, videoEnabled,
     sendMessage, toggleAudio, toggleVideo, cleanup,
   } = useRoomCall(currentRoom);
+  const { guests, kickGuest } = useGuestRelay({
+    room: currentRoom,
+    isHost: (host?.replace(/^~/, "") || "") === ship,
+    localStream,
+  });
   const [chatInput, setChatInput] = useState("");
   const [showChat, setShowChat] = useState(false);
   const [status, setStatus] = useState<"prompt" | "joining" | "joined">("prompt");
@@ -107,13 +113,22 @@ export default function RoomPage() {
           <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/apps/campfire/room/~${hostClean}/${name}`); }} className="text-xs text-stone-500 hover:text-amber-500 transition-colors px-2 py-1">
             Copy Link
           </button>
+          {currentRoom.public && (
+            <button
+              onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/apps/campfire/public/room/~${hostClean}/${name}`); }}
+              className="text-xs text-amber-600 hover:text-amber-400 transition-colors px-2 py-1 border border-amber-900/40 rounded"
+              title="Public link for non-Urbit guests"
+            >
+              Public Link
+            </button>
+          )}
           <span className="text-xs text-stone-600 font-mono">~{ship}</span>
         </div>
       </header>
 
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 relative">
-          <VideoGrid peers={peers} localStream={localStream} ship={ship} />
+          <VideoGrid peers={peers} guests={guests} localStream={localStream} ship={ship} />
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-stone-900/90 backdrop-blur border border-stone-700/50 rounded-full px-4 py-2 shadow-xl">
             <Btn active={audioEnabled} onClick={toggleAudio}>{audioEnabled ? <MicOn /> : <MicOff />}</Btn>
             <Btn active={videoEnabled} onClick={toggleVideo}>{videoEnabled ? <VidOn /> : <VidOff />}</Btn>

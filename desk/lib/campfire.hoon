@@ -94,5 +94,24 @@
     ?:  =(typ 'leave')
       [%leave (so (~(got by p.jon) 'name'))]
     ~|("unknown campfire remote action: {<typ>}" !!)
+  ::
+  ++  host-signal
+    |=  jon=json
+    ^-  host-signal:campfire
+    ?>  ?=([%o *] jon)
+    =/  typ  (so (~(got by p.jon) 'type'))
+    ?:  =(typ 'answer')
+      :*  %answer
+          (so (~(got by p.jon) 'guestId'))
+          (so (~(got by p.jon) 'sdp'))
+      ==
+    ?:  =(typ 'host-ice')
+      :*  %host-ice
+          (so (~(got by p.jon) 'guestId'))
+          (so (~(got by p.jon) 'candidate'))
+      ==
+    ?:  =(typ 'kick')
+      [%kick (so (~(got by p.jon) 'guestId'))]
+    ~|("unknown host-signal type: {<typ>}" !!)
   --
 --
