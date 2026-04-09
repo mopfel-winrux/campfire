@@ -1,0 +1,20 @@
+{
+  "name": "Campfire",
+  "short_name": "Campfire",
+  "description": "WebRTC voice and video calling for Urbit",
+  "start_url": "/apps/campfire/",
+  "scope": "/apps/campfire/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1c1917",
+  "theme_color": "#d97706",
+  "icons": [
+    {
+      "src": "/apps/campfire/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["communication", "social"]
+}

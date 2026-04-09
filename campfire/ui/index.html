@@ -2,10 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#d97706" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Campfire" />
     <title>Campfire</title>
-    <link rel="icon" href="/src/assets/favicon.svg" sizes="any" type="image/svg+xml" />
+    <link rel="icon" href="/apps/campfire/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apps/campfire/icon.svg" />
+    <link rel="manifest" href="/apps/campfire/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,6 +20,15 @@
     <link href="https://fonts.googleapis.com/css?family=Rubik:200,300,400,400i,500,500i,700,700i&display=swap"
       rel="stylesheet">
     <script src="/session.js"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker
+            .register("/apps/campfire/sw.js", { scope: "/apps/campfire/" })
+            .catch(function (e) { console.warn("SW registration failed:", e); });
+        });
+      }
+    </script>
   </head>
   <body>
     <div id="root" class="h-full"></div>
