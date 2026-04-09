@@ -56,29 +56,21 @@ export function useRoom() {
 
   const joinRoom = useCallback(
     async (host: string, name: string) => {
-      await urbit.poke({
-        app: "campfire",
-        mark: "campfire-action",
-        json: { type: "join", host: `~${host.replace(/^~/, "")}`, name },
-      });
-
-      // Subscribe to updates for this room via our own agent (mirrors remote)
+      // Subscribe FIRST so we catch the snapshot
       const subId = await urbit.subscribe({
         app: "campfire",
         path: "/joined",
         event: (evt: any) => {
+          console.log("Room event:", evt);
           if (evt.type === "snapshot") {
-            const room = parseRoom(evt.room);
-            setCurrentRoom(room);
+            setCurrentRoom(parseRoom(evt.room));
           } else if (evt.type === "joined" && evt.name === name) {
             setCurrentRoom((r) =>
-              r ? { ...r, members: [...r.members, evt.who] } : r
+              r ? { ...r, members: [...new Set([...r.members, evt.who])] } : r
             );
           } else if (evt.type === "left" && evt.name === name) {
             setCurrentRoom((r) =>
-              r
-                ? { ...r, members: r.members.filter((m) => m !== evt.who) }
-                : r
+              r ? { ...r, members: r.members.filter((m) => m !== evt.who) } : r
             );
           } else if (evt.type === "closed" && evt.name === name) {
             setCurrentRoom(null);
@@ -88,6 +80,13 @@ export function useRoom() {
         quit: () => console.warn("Room subscription quit"),
       });
       subIdRef.current = subId;
+
+      // Then poke to join
+      await urbit.poke({
+        app: "campfire",
+        mark: "campfire-action",
+        json: { type: "join", host: `~${host.replace(/^~/, "")}`, name },
+      });
     },
     [urbit]
   );
@@ -99,23 +98,22 @@ export function useRoom() {
         app: "campfire",
         path: `/room/${name}`,
         event: (evt: any) => {
+          console.log("Hosted room event:", evt);
           if (evt.type === "snapshot") {
             setCurrentRoom(parseRoom(evt.room));
           } else if (evt.type === "joined") {
             setCurrentRoom((r) =>
-              r ? { ...r, members: [...r.members, evt.who] } : r
+              r ? { ...r, members: [...new Set([...r.members, evt.who])] } : r
             );
           } else if (evt.type === "left") {
             setCurrentRoom((r) =>
-              r
-                ? { ...r, members: r.members.filter((m) => m !== evt.who) }
-                : r
+              r ? { ...r, members: r.members.filter((m) => m !== evt.who) } : r
             );
           } else if (evt.type === "closed") {
             setCurrentRoom(null);
           }
         },
-        err: console.error,
+        err: (e: any) => console.error("Hosted room sub error:", e),
         quit: () => console.warn("Hosted room subscription quit"),
       });
       subIdRef.current = subId;

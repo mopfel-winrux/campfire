@@ -19,12 +19,12 @@ export function useRoomCall(room: Room | null) {
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [messages, setMessages] = useState<{ speaker: string; text: string }[]>([]);
+  const [mediaReady, setMediaReady] = useState(false);
   const rtcAppRef = useRef<UrbitRTCApp | null>(null);
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
   const dataChannelsRef = useRef<Map<string, RTCDataChannel>>(new Map());
 
-  // Keep refs in sync
   peersRef.current = peers;
   localStreamRef.current = localStream;
 
@@ -40,44 +40,59 @@ export function useRoomCall(room: Room | null) {
 
     // Handle incoming calls from room members
     app.addEventListener("incomingcall", ((evt: any) => {
-      console.log("Room: incoming call from", evt.peer);
-      const conn = evt.answer() as UrbitRTCPeerConnection;
-      setupPeerConnection(conn, evt.peer, false);
+      const peerClean = evt.peer.replace(/^~/, "");
+      console.log("Room: incoming call from", peerClean);
+      // Only answer if we don't already have a connection to this peer
+      if (!peersRef.current.has(peerClean)) {
+        const conn = evt.answer() as UrbitRTCPeerConnection;
+        setupPeer(conn, peerClean, false);
+      }
     }) as EventListener);
 
     return () => {
-      // Cleanup all connections
-      peersRef.current.forEach((p) => p.conn.close());
+      peersRef.current.forEach((p) => {
+        try { p.conn.close(); } catch (e) {}
+      });
     };
   }, [ship, urbit]);
 
-  // Get local media
+  // Get local media on room join
   useEffect(() => {
     if (!room) return;
+    console.log("Room: getting local media");
     navigator.mediaDevices
       .getUserMedia({ audio: true, video: true })
       .then((stream) => {
+        console.log("Room: got video+audio");
         setLocalStream(stream);
         localStreamRef.current = stream;
+        setMediaReady(true);
       })
       .catch(() => {
         navigator.mediaDevices
           .getUserMedia({ audio: true, video: false })
           .then((stream) => {
+            console.log("Room: got audio only");
             setLocalStream(stream);
             localStreamRef.current = stream;
+            setMediaReady(true);
           })
-          .catch(console.error);
+          .catch((e) => {
+            console.error("Room: no media", e);
+            setMediaReady(true); // proceed without media
+          });
       });
 
     return () => {
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      setLocalStream(null);
+      setMediaReady(false);
     };
   }, [room?.name]);
 
-  // Connect to room members when membership changes
+  // Connect to room members AFTER media is ready
   useEffect(() => {
-    if (!room || !rtcAppRef.current || !ship) return;
+    if (!room || !rtcAppRef.current || !ship || !mediaReady) return;
 
     const myShip = ship.replace(/^~/, "");
     const currentPeers = new Set(peersRef.current.keys());
@@ -91,9 +106,9 @@ export function useRoomCall(room: Room | null) {
       if (myShip < memberClean) {
         console.log("Room: calling", memberClean);
         const conn = rtcAppRef.current.call(memberClean, DAP);
-        setupPeerConnection(conn, memberClean, true);
+        setupPeer(conn, memberClean, true);
       }
-      // else: wait for them to call us (handled by incomingcall listener)
+      // else: wait for incoming call (handled by incomingcall listener)
     }
 
     // Remove peers no longer in room
@@ -102,8 +117,9 @@ export function useRoomCall(room: Room | null) {
         (m) => m.replace(/^~/, "") === peerShip
       );
       if (!inRoom) {
+        console.log("Room: removing", peerShip);
         const pc = peersRef.current.get(peerShip);
-        if (pc) pc.conn.close();
+        if (pc) try { pc.conn.close(); } catch (e) {}
         setPeers((prev) => {
           const next = new Map(prev);
           next.delete(peerShip);
@@ -112,14 +128,15 @@ export function useRoomCall(room: Room | null) {
         dataChannelsRef.current.delete(peerShip);
       }
     }
-  }, [room?.members, ship]);
+  }, [room?.members, ship, mediaReady]);
 
-  const setupPeerConnection = useCallback(
-    (conn: UrbitRTCPeerConnection, peer: string, isCaller: boolean) => {
+  const setupPeer = useCallback(
+    (conn: UrbitRTCPeerConnection, peerClean: string, isCaller: boolean) => {
+      console.log("Room: setting up peer", peerClean, isCaller ? "(caller)" : "(answerer)");
       const remoteStream = new MediaStream();
-      const peerClean = peer.replace(/^~/, "");
 
       conn.ontrack = (evt) => {
+        console.log("Room: remote track from", peerClean, evt.track.kind);
         remoteStream.addTrack(evt.track);
         setPeers((prev) => {
           const next = new Map(prev);
@@ -135,6 +152,7 @@ export function useRoomCall(room: Room | null) {
       };
 
       conn.onurbitstatechanged = (evt: any) => {
+        console.log("Room: peer", peerClean, "state:", evt.urbitState);
         setPeers((prev) => {
           const next = new Map(prev);
           const existing = next.get(peerClean);
@@ -146,6 +164,7 @@ export function useRoomCall(room: Room | null) {
       };
 
       conn.addEventListener("hungupcall", () => {
+        console.log("Room: peer", peerClean, "hung up");
         setPeers((prev) => {
           const next = new Map(prev);
           next.delete(peerClean);
@@ -157,41 +176,37 @@ export function useRoomCall(room: Room | null) {
       // Data channel for ephemeral chat
       if (isCaller) {
         const dc = conn.createDataChannel("campfire-room");
-        dc.onopen = () => {
-          dataChannelsRef.current.set(peerClean, dc);
-        };
+        dc.onopen = () => dataChannelsRef.current.set(peerClean, dc);
         dc.onmessage = (evt) => {
           setMessages((prev) => [{ speaker: peerClean, text: evt.data }, ...prev]);
         };
       } else {
         conn.addEventListener("datachannel", ((evt: RTCDataChannelEvent) => {
           if (evt.channel.label === "campfire-room") {
-            evt.channel.onopen = () => {
-              dataChannelsRef.current.set(peerClean, evt.channel);
-            };
+            evt.channel.onopen = () => dataChannelsRef.current.set(peerClean, evt.channel);
             evt.channel.onmessage = (msgEvt) => {
-              setMessages((prev) => [
-                { speaker: peerClean, text: msgEvt.data },
-                ...prev,
-              ]);
+              setMessages((prev) => [{ speaker: peerClean, text: msgEvt.data }, ...prev]);
             };
           }
         }) as EventListener);
       }
 
-      // Add local tracks
+      // Add local tracks BEFORE initialize
       if (localStreamRef.current) {
+        console.log("Room: adding", localStreamRef.current.getTracks().length, "local tracks for", peerClean);
         localStreamRef.current.getTracks().forEach((track) => {
           conn.addTrack(track, localStreamRef.current!);
         });
       }
 
+      // Add to peers map
       setPeers((prev) => {
         const next = new Map(prev);
         next.set(peerClean, { conn, peer: peerClean, remoteStream, status: "connecting" });
         return next;
       });
 
+      // Start the connection
       conn.initialize();
     },
     []
@@ -222,11 +237,14 @@ export function useRoomCall(room: Room | null) {
   }, [localStream]);
 
   const cleanup = useCallback(() => {
-    peersRef.current.forEach((p) => p.conn.close());
+    peersRef.current.forEach((p) => {
+      try { p.conn.close(); } catch (e) {}
+    });
     setPeers(new Map());
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     setLocalStream(null);
     setMessages([]);
+    setMediaReady(false);
     dataChannelsRef.current.clear();
   }, []);
 
