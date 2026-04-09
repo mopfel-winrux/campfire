@@ -75,7 +75,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     rtcAppRef.current = app;
 
     app.addEventListener("incomingcall", ((evt: UrbitRTCIncomingCallEvent) => {
-      console.log("Incoming call from", evt.peer);
+      // Only handle 1:1 calls on this dap. Room calls use a different dap.
+      if (evt.dap !== "campfire") return;
       setIncoming({ peer: evt.peer, uuid: evt.uuid, evt });
 
       // Browser notification

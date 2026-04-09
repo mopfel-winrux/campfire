@@ -117,7 +117,7 @@
     =/  name  +<.path
     =/  rm=room:campfire  (~(got by host-rooms.state) name)
     :_  this
-    :~  [%give %fact ~ %campfire-update !>(`update:campfire`[%snapshot rm])]
+    :~  [%give %fact ~[path] %campfire-update !>(`update:campfire`[%snapshot rm])]
     ==
     ::
       [%hosted ~]  `this
@@ -125,7 +125,7 @@
     ::  give initial snapshots for all joined rooms
     :_  this
     %+  turn  ~(val by join-rooms.state)
-    |=(rm=room:campfire [%give %fact ~ %campfire-update !>(`update:campfire`[%snapshot rm])])
+    |=(rm=room:campfire [%give %fact ~[path] %campfire-update !>(`update:campfire`[%snapshot rm])])
   ==
 ::
 ++  on-leave  |=(* `this)

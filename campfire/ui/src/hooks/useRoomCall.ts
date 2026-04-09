@@ -35,19 +35,19 @@ export function useRoomCall(room: Room | null) {
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     };
     const app = new UrbitRTCApp(DAP, config);
-    app.urbit = urbit;
-    rtcAppRef.current = app;
 
-    // Handle incoming calls from room members
+    // Attach listener BEFORE urbit assignment (which triggers initialize/subscribe)
     app.addEventListener("incomingcall", ((evt: any) => {
       const peerClean = evt.peer.replace(/^~/, "");
-      console.log("Room: incoming call from", peerClean);
-      // Only answer if we don't already have a connection to this peer
       if (!peersRef.current.has(peerClean)) {
         const conn = evt.answer() as UrbitRTCPeerConnection;
         setupPeer(conn, peerClean, false);
       }
     }) as EventListener);
+
+    // Now attach urbit, which triggers subscription
+    app.urbit = urbit;
+    rtcAppRef.current = app;
 
     return () => {
       peersRef.current.forEach((p) => {
@@ -59,11 +59,9 @@ export function useRoomCall(room: Room | null) {
   // Get local media on room join
   useEffect(() => {
     if (!room) return;
-    console.log("Room: getting local media");
     navigator.mediaDevices
       .getUserMedia({ audio: true, video: true })
       .then((stream) => {
-        console.log("Room: got video+audio");
         setLocalStream(stream);
         localStreamRef.current = stream;
         setMediaReady(true);
@@ -72,14 +70,13 @@ export function useRoomCall(room: Room | null) {
         navigator.mediaDevices
           .getUserMedia({ audio: true, video: false })
           .then((stream) => {
-            console.log("Room: got audio only");
             setLocalStream(stream);
             localStreamRef.current = stream;
             setMediaReady(true);
           })
           .catch((e) => {
-            console.error("Room: no media", e);
-            setMediaReady(true); // proceed without media
+            console.error("Room: could not access media", e);
+            setMediaReady(true);
           });
       });
 
@@ -102,9 +99,8 @@ export function useRoomCall(room: Room | null) {
       if (memberClean === myShip) continue;
       if (currentPeers.has(memberClean)) continue;
 
-      // Deterministic: lower @p initiates
+      // Deterministic: lower @p initiates to avoid duplicate calls
       if (myShip < memberClean) {
-        console.log("Room: calling", memberClean);
         const conn = rtcAppRef.current.call(memberClean, DAP);
         setupPeer(conn, memberClean, true);
       }
@@ -117,7 +113,6 @@ export function useRoomCall(room: Room | null) {
         (m) => m.replace(/^~/, "") === peerShip
       );
       if (!inRoom) {
-        console.log("Room: removing", peerShip);
         const pc = peersRef.current.get(peerShip);
         if (pc) try { pc.conn.close(); } catch (e) {}
         setPeers((prev) => {
@@ -132,11 +127,9 @@ export function useRoomCall(room: Room | null) {
 
   const setupPeer = useCallback(
     (conn: UrbitRTCPeerConnection, peerClean: string, isCaller: boolean) => {
-      console.log("Room: setting up peer", peerClean, isCaller ? "(caller)" : "(answerer)");
       const remoteStream = new MediaStream();
 
       conn.ontrack = (evt) => {
-        console.log("Room: remote track from", peerClean, evt.track.kind);
         remoteStream.addTrack(evt.track);
         setPeers((prev) => {
           const next = new Map(prev);
@@ -152,7 +145,6 @@ export function useRoomCall(room: Room | null) {
       };
 
       conn.onurbitstatechanged = (evt: any) => {
-        console.log("Room: peer", peerClean, "state:", evt.urbitState);
         setPeers((prev) => {
           const next = new Map(prev);
           const existing = next.get(peerClean);
@@ -164,7 +156,6 @@ export function useRoomCall(room: Room | null) {
       };
 
       conn.addEventListener("hungupcall", () => {
-        console.log("Room: peer", peerClean, "hung up");
         setPeers((prev) => {
           const next = new Map(prev);
           next.delete(peerClean);
@@ -193,7 +184,6 @@ export function useRoomCall(room: Room | null) {
 
       // Add local tracks BEFORE initialize
       if (localStreamRef.current) {
-        console.log("Room: adding", localStreamRef.current.getTracks().length, "local tracks for", peerClean);
         localStreamRef.current.getTracks().forEach((track) => {
           conn.addTrack(track, localStreamRef.current!);
         });
