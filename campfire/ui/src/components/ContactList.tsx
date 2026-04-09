@@ -32,7 +32,7 @@ export default function ContactList({ contacts, onCall }: Props) {
                 className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono text-stone-300"
                 style={{ backgroundColor: contact.color || "#555" }}
               >
-                {ship.slice(0, 3)}
+                ~{ship}
               </div>
             )}
             <div className="flex flex-col min-w-0">
