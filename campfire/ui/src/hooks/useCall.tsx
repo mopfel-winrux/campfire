@@ -153,7 +153,17 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
       conn.addEventListener("hungupcall", () => {
         console.log("Remote hung up");
-        setCall((c) => (c ? { ...c, wasHungUp: true } : c));
+        localStream?.getTracks().forEach((t) => t.stop());
+        setCall((c) => (c ? { ...c, wasHungUp: true, dataChannelOpen: false } : c));
+      });
+
+      // Hangup on tab close / navigate away
+      const onBeforeUnload = () => {
+        conn.close();
+      };
+      window.addEventListener("beforeunload", onBeforeUnload);
+      conn.addEventListener("hungupcall", () => {
+        window.removeEventListener("beforeunload", onBeforeUnload);
       });
 
       // Data channel
@@ -262,11 +272,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [incoming, clearIncomingNotification]);
 
   const hangup = useCallback(() => {
-    if (call?.conn) {
+    if (call) {
       call.localStream?.getTracks().forEach((t) => t.stop());
-      call.conn.close();
+      call.remoteStream?.getTracks().forEach((t) => t.stop());
+      if (call.conn) call.conn.close();
     }
     setCall(null);
+    document.title = "Campfire";
   }, [call]);
 
   const sendMessage = useCallback(
