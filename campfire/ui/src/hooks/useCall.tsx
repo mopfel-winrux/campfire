@@ -74,9 +74,30 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     app.urbit = urbit;
     rtcAppRef.current = app;
 
+    // Request notification permission
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+
     app.addEventListener("incomingcall", ((evt: UrbitRTCIncomingCallEvent) => {
       console.log("Incoming call from", evt.peer);
       setIncoming({ peer: evt.peer, uuid: evt.uuid, evt });
+
+      // Browser notification
+      if ("Notification" in window && Notification.permission === "granted") {
+        const n = new Notification("Incoming Call", {
+          body: `~${evt.peer} is calling you`,
+          tag: "campfire-call",
+          requireInteraction: true,
+        });
+        n.onclick = () => {
+          window.focus();
+          n.close();
+        };
+      }
+
+      // Update page title
+      document.title = `Incoming call from ~${evt.peer}`;
     }) as EventListener);
 
     // Icepond
@@ -219,20 +240,26 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     [setupConnection]
   );
 
+  const clearIncomingNotification = useCallback(() => {
+    document.title = "Campfire";
+  }, []);
+
   const answerCall = useCallback(async (): Promise<string> => {
     if (!incoming) throw new Error("No incoming call");
     const conn = incoming.evt.answer();
-    const c = setupConnection(conn, incoming.peer, false);
+    setupConnection(conn, incoming.peer, false);
     setIncoming(null);
+    clearIncomingNotification();
     return incoming.uuid;
-  }, [incoming, setupConnection]);
+  }, [incoming, setupConnection, clearIncomingNotification]);
 
   const rejectCall = useCallback(() => {
     if (incoming) {
       incoming.evt.reject();
       setIncoming(null);
+      clearIncomingNotification();
     }
-  }, [incoming]);
+  }, [incoming, clearIncomingNotification]);
 
   const hangup = useCallback(() => {
     if (call?.conn) {
