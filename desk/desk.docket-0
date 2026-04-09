@@ -1,8 +1,8 @@
-:~  title+'Campfire'
+:~  title+'Campfire (Alpha)'
     info+'WebRTC voice and video calling for Urbit.'
     color+0xff.c179
     version+[0 2 0]
-    website+'https://github.com/holium/campfire'
+    website+'https://github.com/mopfel-winrux/campfire'
     license+'MIT'
     base+'campfire'
     site+/apps/campfire
