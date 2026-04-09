@@ -45,6 +45,7 @@ interface CallCtx {
   toggleVideo: () => void;
   audioEnabled: boolean;
   videoEnabled: boolean;
+  requestNotificationPermission: () => void;
 }
 
 const CallContext = createContext<CallCtx>(null!);
@@ -59,7 +60,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const rtcAppRef = useRef<UrbitRTCApp | null>(null);
   const callRef = useRef<CallState | null>(null);
 
-  // Keep ref in sync
   callRef.current = call;
 
   // Initialize UrbitRTCApp and Icepond
@@ -74,29 +74,27 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     app.urbit = urbit;
     rtcAppRef.current = app;
 
-    // Request notification permission
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-
     app.addEventListener("incomingcall", ((evt: UrbitRTCIncomingCallEvent) => {
       console.log("Incoming call from", evt.peer);
       setIncoming({ peer: evt.peer, uuid: evt.uuid, evt });
 
       // Browser notification
-      if ("Notification" in window && Notification.permission === "granted") {
-        const n = new Notification("Incoming Call", {
-          body: `~${evt.peer} is calling you`,
-          tag: "campfire-call",
-          requireInteraction: true,
-        });
-        n.onclick = () => {
-          window.focus();
-          n.close();
-        };
+      try {
+        if ("Notification" in window && Notification.permission === "granted") {
+          const n = new Notification("Incoming Call", {
+            body: `~${evt.peer} is calling you`,
+            tag: "campfire-call",
+            requireInteraction: true,
+          });
+          n.onclick = () => {
+            window.focus();
+            n.close();
+          };
+        }
+      } catch (e) {
+        console.warn("Notification failed:", e);
       }
 
-      // Update page title
       document.title = `Incoming call from ~${evt.peer}`;
     }) as EventListener);
 
@@ -114,15 +112,28 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     };
     pond.initialize().catch(console.error);
 
-    return () => {
-      // cleanup
-    };
+    return () => {};
   }, [ship, urbit]);
+
+  // Send hangup poke directly — more reliable than conn.close()
+  const sendHangupPoke = useCallback(
+    (uuid: string) => {
+      try {
+        urbit.poke({
+          app: "rtcswitchboard",
+          mark: "rtcswitchboard-from-client",
+          json: { tag: "reject", uuid },
+        });
+      } catch (e) {
+        console.warn("Hangup poke failed:", e);
+      }
+    },
+    [urbit]
+  );
 
   const setupConnection = useCallback(
     (conn: UrbitRTCPeerConnection, peer: string, isCaller: boolean) => {
       const remoteStream = new MediaStream();
-      const localStream = new MediaStream();
 
       const newCall: CallState = {
         conn,
@@ -130,7 +141,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         peer,
         isCaller,
         status: "connecting",
-        localStream,
+        localStream: null,
         remoteStream,
         dataChannel: null,
         dataChannelOpen: false,
@@ -142,29 +153,40 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       conn.ontrack = (evt) => {
         console.log("Remote track received:", evt.track.kind);
         remoteStream.addTrack(evt.track);
-        setCall((c) => (c ? { ...c, remoteStream: new MediaStream(remoteStream.getTracks()) } : c));
+        setCall((c) =>
+          c ? { ...c, remoteStream: new MediaStream(remoteStream.getTracks()) } : c
+        );
       };
 
       // State changes
-      conn.onurbitstatechanged = (evt) => {
+      conn.onurbitstatechanged = (evt: any) => {
         console.log("Urbit state:", evt.urbitState);
         setCall((c) => (c ? { ...c, status: evt.urbitState } : c));
       };
 
+      // Remote hangup
       conn.addEventListener("hungupcall", () => {
         console.log("Remote hung up");
-        localStream?.getTracks().forEach((t) => t.stop());
-        setCall((c) => (c ? { ...c, wasHungUp: true, dataChannelOpen: false } : c));
+        setCall((c) => {
+          if (c) {
+            c.localStream?.getTracks().forEach((t) => t.stop());
+          }
+          return c ? { ...c, wasHungUp: true, dataChannelOpen: false } : c;
+        });
       });
 
-      // Hangup on tab close / navigate away
-      const onBeforeUnload = () => {
-        conn.close();
+      // Also detect WebRTC connection failure/close
+      conn.onconnectionstatechange = () => {
+        console.log("WebRTC connection state:", conn.connectionState);
+        if (conn.connectionState === "failed" || conn.connectionState === "disconnected") {
+          setCall((c) => {
+            if (c && !c.wasHungUp) {
+              return { ...c, wasHungUp: true, dataChannelOpen: false };
+            }
+            return c;
+          });
+        }
       };
-      window.addEventListener("beforeunload", onBeforeUnload);
-      conn.addEventListener("hungupcall", () => {
-        window.removeEventListener("beforeunload", onBeforeUnload);
-      });
 
       // Data channel
       if (isCaller) {
@@ -176,10 +198,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         dc.onmessage = (evt) => {
           setCall((c) =>
             c
-              ? {
-                  ...c,
-                  messages: [{ speaker: peer, text: evt.data }, ...c.messages],
-                }
+              ? { ...c, messages: [{ speaker: peer, text: evt.data }, ...c.messages] }
               : c
           );
         };
@@ -195,10 +214,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
             dc.onmessage = (msgEvt) => {
               setCall((c) =>
                 c
-                  ? {
-                      ...c,
-                      messages: [{ speaker: peer, text: msgEvt.data }, ...c.messages],
-                    }
+                  ? { ...c, messages: [{ speaker: peer, text: msgEvt.data }, ...c.messages] }
                   : c
               );
             };
@@ -210,14 +226,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       navigator.mediaDevices
         .getUserMedia({ audio: true, video: true })
         .then((stream) => {
-          stream.getTracks().forEach((track) => {
-            conn.addTrack(track, stream);
-          });
+          stream.getTracks().forEach((track) => conn.addTrack(track, stream));
           setCall((c) => (c ? { ...c, localStream: stream } : c));
         })
-        .catch((err) => {
-          console.warn("Could not get media:", err);
-          // Try audio only
+        .catch(() => {
           navigator.mediaDevices
             .getUserMedia({ audio: true, video: false })
             .then((stream) => {
@@ -229,17 +241,44 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
       setCall(newCall);
       conn.initialize();
+
+      // Hangup on tab close using sendBeacon for reliability
+      const onBeforeUnload = () => {
+        const uuid = conn.uuid;
+        if (uuid) {
+          // sendBeacon is more reliable than fetch on unload
+          const url = `${window.location.origin}/~/channel/${Date.now()}`;
+          const body = JSON.stringify([
+            {
+              id: 1,
+              action: "poke",
+              ship: ship,
+              app: "rtcswitchboard",
+              mark: "rtcswitchboard-from-client",
+              json: { tag: "reject", uuid },
+            },
+          ]);
+          navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
+        }
+      };
+      window.addEventListener("beforeunload", onBeforeUnload);
+
+      // Clean up beforeunload when call ends
+      const origSetCall = setCall;
+      conn.addEventListener("hungupcall", () => {
+        window.removeEventListener("beforeunload", onBeforeUnload);
+      });
+
       return newCall;
     },
-    []
+    [ship]
   );
 
   const placeCall = useCallback(
     async (peer: string): Promise<string> => {
       if (!rtcAppRef.current) throw new Error("Not initialized");
       const conn = rtcAppRef.current.call(peer, DAP);
-      const c = setupConnection(conn, peer, true);
-      // Wait for UUID to be assigned
+      setupConnection(conn, peer, true);
       return new Promise((resolve) => {
         conn.onring = (uuid) => {
           setCall((prev) => (prev ? { ...prev, uuid } : prev));
@@ -250,36 +289,36 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     [setupConnection]
   );
 
-  const clearIncomingNotification = useCallback(() => {
-    document.title = "Campfire";
-  }, []);
-
   const answerCall = useCallback(async (): Promise<string> => {
     if (!incoming) throw new Error("No incoming call");
     const conn = incoming.evt.answer();
     setupConnection(conn, incoming.peer, false);
     setIncoming(null);
-    clearIncomingNotification();
+    document.title = "Campfire";
     return incoming.uuid;
-  }, [incoming, setupConnection, clearIncomingNotification]);
+  }, [incoming, setupConnection]);
 
   const rejectCall = useCallback(() => {
     if (incoming) {
       incoming.evt.reject();
       setIncoming(null);
-      clearIncomingNotification();
+      document.title = "Campfire";
     }
-  }, [incoming, clearIncomingNotification]);
+  }, [incoming]);
 
   const hangup = useCallback(() => {
     if (call) {
       call.localStream?.getTracks().forEach((t) => t.stop());
       call.remoteStream?.getTracks().forEach((t) => t.stop());
-      if (call.conn) call.conn.close();
+      // Send hangup directly, then close
+      if (call.uuid) sendHangupPoke(call.uuid);
+      if (call.conn) {
+        try { call.conn.close(); } catch (e) {}
+      }
     }
     setCall(null);
     document.title = "Campfire";
-  }, [call]);
+  }, [call, sendHangupPoke]);
 
   const sendMessage = useCallback(
     (text: string) => {
@@ -307,6 +346,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     });
   }, [call]);
 
+  // Must be called from a user gesture (button click)
+  const requestNotificationPermission = useCallback(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
   return (
     <CallContext.Provider
       value={{
@@ -322,6 +368,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         toggleVideo,
         audioEnabled,
         videoEnabled,
+        requestNotificationPermission,
       }}
     >
       {children}

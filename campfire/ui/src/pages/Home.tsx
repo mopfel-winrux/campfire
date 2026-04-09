@@ -11,7 +11,8 @@ import { Campfire } from "../icons/Campfire";
 
 export default function Home() {
   const { ship } = useUrbit();
-  const { incoming, placeCall, answerCall, rejectCall } = useCall();
+  const { incoming, placeCall, answerCall, rejectCall, requestNotificationPermission } = useCall();
+  const notifPermission = typeof Notification !== "undefined" ? Notification.permission : "denied";
   const { contacts } = useContacts();
   const { hostedRooms, joinedRooms, createRoom, refreshRooms } = useRoom();
   const navigate = useNavigate();
@@ -206,7 +207,17 @@ export default function Home() {
         </div>
       )}
 
-      <footer className="absolute bottom-4 text-stone-700 text-xs">v0.2.0</footer>
+      <footer className="absolute bottom-4 flex items-center gap-4 text-stone-700 text-xs">
+        <span>v0.2.0</span>
+        {notifPermission === "default" && (
+          <button
+            onClick={requestNotificationPermission}
+            className="text-amber-600/60 hover:text-amber-500 transition-colors"
+          >
+            Enable notifications
+          </button>
+        )}
+      </footer>
     </div>
   );
 }
