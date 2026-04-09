@@ -144,14 +144,19 @@ export default function Home() {
                 placeholder="Display title (optional)"
                 className="bg-stone-800 border border-stone-700 rounded px-3 py-2 text-sm text-stone-100 placeholder:text-stone-600 focus:outline-none focus:border-amber-700/50"
               />
-              <label className="flex items-center gap-2 px-1 py-1 text-xs text-stone-400 cursor-pointer">
+              <label className="flex items-start gap-2 px-1 py-1 text-xs text-stone-400 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={roomPublic}
                   onChange={(e) => setRoomPublic(e.target.checked)}
-                  className="accent-amber-600"
+                  className="accent-amber-600 mt-0.5"
                 />
-                <span>Public — non-Urbit users can join with a link</span>
+                <span className="flex flex-col">
+                  <span>Public* — non-Urbit users can join with a link</span>
+                  <span className="text-[10px] text-stone-600 mt-0.5">
+                    *Experimental: guest connections are unreliable without a TURN server
+                  </span>
+                </span>
               </label>
               <button
                 onClick={handleCreateRoom}
