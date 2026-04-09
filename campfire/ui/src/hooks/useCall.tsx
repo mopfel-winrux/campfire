@@ -79,6 +79,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       setIncoming({ peer: evt.peer, uuid: evt.uuid, evt });
 
       // Browser notification
+      console.log("Notification permission:", "Notification" in window ? Notification.permission : "not available");
       try {
         if ("Notification" in window && Notification.permission === "granted") {
           const n = new Notification("Incoming Call", {
@@ -95,7 +96,15 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         console.warn("Notification failed:", e);
       }
 
-      document.title = `Incoming call from ~${evt.peer}`;
+      // Flash the title
+      document.title = `🔥 ~${evt.peer} is calling`;
+      let flash = true;
+      const titleInterval = setInterval(() => {
+        document.title = flash ? `🔥 ~${evt.peer} is calling` : "Campfire";
+        flash = !flash;
+      }, 1000);
+      // Store interval so we can clear it
+      (window as any).__campfireTitleFlash = titleInterval;
     }) as EventListener);
 
     // Icepond
@@ -289,22 +298,30 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     [setupConnection]
   );
 
+  const clearIncomingAlert = useCallback(() => {
+    document.title = "Campfire";
+    if ((window as any).__campfireTitleFlash) {
+      clearInterval((window as any).__campfireTitleFlash);
+      (window as any).__campfireTitleFlash = null;
+    }
+  }, []);
+
   const answerCall = useCallback(async (): Promise<string> => {
     if (!incoming) throw new Error("No incoming call");
     const conn = incoming.evt.answer();
     setupConnection(conn, incoming.peer, false);
     setIncoming(null);
-    document.title = "Campfire";
+    clearIncomingAlert();
     return incoming.uuid;
-  }, [incoming, setupConnection]);
+  }, [incoming, setupConnection, clearIncomingAlert]);
 
   const rejectCall = useCallback(() => {
     if (incoming) {
       incoming.evt.reject();
       setIncoming(null);
-      document.title = "Campfire";
+      clearIncomingAlert();
     }
-  }, [incoming]);
+  }, [incoming, clearIncomingAlert]);
 
   const hangup = useCallback(() => {
     if (call) {
